@@ -4,50 +4,63 @@ module mips_cpu(
 	input  resetn,
 	input  clk,
 
-	output inst_sram_wen,
-	
+	output inst_sram_en,
+	output [3:0] inst_sram_wen,
+	output [31:0] inst_sram_addr,
 	output [31:0] inst_sram_wdata,
+	input [31:0] inst_sram_rdata,
+	
+	output data_sram_en,
+	output [3:0] data_sram_wen,
+	output [31:0] data_sram_addr,
+	output [31:0] data_sram_wdata,
+	input [31:0] data_sram_rdata,
+	
+	output [31:0] debug_wb_pc,//TODO：赋值
+	output [3:0]debug_wb_rf_wen,
+	output [4:0] debug_wb_rf_wnum,
+	output [31:0] debug_wb_rf_wdata,
+	//TODO: 处理握手信号
 	//Instruction request channel
-	output reg [31:0] PC,
 	output Inst_Req_Valid,
 	input Inst_Req_Ack,
 
 	//Instruction response channel
-	input  [31:0] Instruction,
 	input Inst_Valid,
 	output Inst_Ack,
 
 	//Memory request channel
-	output [31:0] Address,
-	output MemWrite,
-	output [31:0] Write_data,
-	output [3:0] Write_strb,
-	output MemRead,
 	input Mem_Req_Ack,
 
 	//Memory data response channel
-	input  [31:0] Read_data,
 	input Read_data_Valid,
 	output Read_data_Ack,
 
     output [31:0]	mips_perf_cnt_0,//clk_counter
 );
 
+    reg [31:0] PC;
+	
 	assign inst_sram_wen = 0;
+	assign inst_sram_addr = PC;
 	assign inst_sram_wdata = 0;
+	
+	assign debug_wb_rf_wen = 4{wen};//TODO：语法可能有问题
+	assign debug_wb_rf_wnum = waddr;
+	assign debug_wb_rf_wdata = wdata;
 	
 	//update inst and data
 	wire [2:0] next_state;
 	reg [31:0] inst;
 	always@(posedge Inst_Valid)
 	begin
-			inst<=Instruction;
+			inst<=inst_sram_rdata;
 	end
 
 	reg [31:0] data_from_mem;
 	always@(posedge Read_data_Valid)
 	begin
-			data_from_mem<=Read_data;
+			data_from_mem<=data_sram_rdata;
 	end
 
 	//define some simple signals (using extend)
@@ -90,7 +103,7 @@ module mips_cpu(
 	control_unit cpu_control_unit(.clk(clk),.resetn(resetn),.behavior(behavior),.Result(Result),
 		.reg_dst(reg_dst),.mem_read(mem_read),.reg_write_value(reg_write_value),
 		.ALUop(ALUop),.mem_write(mem_write),.B_src(B_src),.reg_write(reg_write),
-		.write_strb(Write_strb),.mem_write_value(mem_write_value),
+		.data_sram_wen(data_sram_wen),.mem_write_value(mem_write_value),
 		//channel control signal
 		.Inst_Req_Valid(Inst_Req_Valid),.Inst_Req_Ack(Inst_Req_Ack),
 		.Inst_Valid(Inst_Valid),.Inst_Ack(Inst_Ack),.Mem_Req_Ack(Mem_Req_Ack),
@@ -103,8 +116,8 @@ module mips_cpu(
 		.output_flag3(flag3)
 	);
     assign behavior=inst[31:26]; 
-	assign MemRead=mem_read;
-	assign MemWrite=mem_write;
+	assign data_sram_en=mem_read;//TODO:这里有问题，与下一行冲突，这是由于这里mem读写用同一个信号了
+	assign data_sram_en=mem_write;
 	
 	//define the signal related to reg_file
 	wire clk_reg_file;									//done
@@ -137,7 +150,7 @@ module mips_cpu(
 	//add the ALU into the circuit
 	alu cpu_alu(.A(A),.B(B),.ALUop(ALUoperation),.Overflow(Overflow),.CarryOut(CarryOut),
 		.Zero(Zero),.Result(Result));
-	assign Address=Result;
+	assign data_sram_addr=Result;
 
 	//add the ALU control unit into the circuit
 	ALU_control cpu_ALU_control(.func(inst[5:0]),.ALUop(ALUop),
@@ -160,7 +173,7 @@ module mips_cpu(
 						  (Result[1:0]==2'b10)?{rdata2[15:0],16'b0}:
 						  (Result[1:0]==2'b11)?{rdata2[7:0],24'b0}:
 						  32'b0;
-	assign Write_data=(mem_write_value==3'b000)?rdata2:
+	assign data_sram_wdata=(mem_write_value==3'b000)?rdata2:
 		              (mem_write_value==3'b001)?write_data_sb:
 				      (mem_write_value==3'b010)?write_data_sh:
 					  (mem_write_value==3'b011)?write_data_swl:
@@ -272,7 +285,7 @@ module mips_cpu(
 	//PC
 	always @(posedge clk) begin
 		if(resetn==0) begin
-			PC<=32'b0;
+			PC<=0xbfc00000;//TODO：不知道这种数字表示方法行不行
 		end
 		else if(PC_enable)begin
 			PC<=pc_next;

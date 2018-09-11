@@ -14,7 +14,7 @@ module control_unit(
 	output reg mem_write,//enable signal
 	output [1:0] B_src,//signal for mux(what to compute)
 	output reg reg_write,//enable signal
-	output [3:0] write_strb,//signal for 8or16-bit write
+	output [3:0] data_sram_wen,//signal for 8or16-bit write
 	output [2:0] mem_write_value,//signal for mux(what to write to mem)
 
 	output reg Inst_Req_Valid, //Instruction_Request_Valid
@@ -301,7 +301,7 @@ module control_unit(
 						  (Result[1:0]==2'b10)? 4'b1100:
 						  (Result[1:0]==2'b11)? 4'b1000:
 						                        4'b0000;
-	assign write_strb=(sw )?        4'b1111:
+	assign data_sram_wen=(sw )?        4'b1111:
 		              (sb )? write_strb_sb :
 					  (sh )? write_strb_sh :
 					  (swl)? write_strb_swl:
