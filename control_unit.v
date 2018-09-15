@@ -5,6 +5,7 @@
 module control_unit(
 	input  clk,
 	input  resetn,
+	output inst_sram_en,
 	input  [5:0] behavior,
 	input  [31:0] Result,//ALU result
 	output [1:0] reg_dst,//signal for mux(where to write)
@@ -16,23 +17,8 @@ module control_unit(
 	output reg reg_write,//enable signal
 	output [3:0] data_sram_wen,//signal for 8or16-bit write
 	output [2:0] mem_write_value,//signal for mux(what to write to mem)
-
-	output reg Inst_Req_Valid, //Instruction_Request_Valid
-	input  Inst_Req_Ack,   //Instruction_Request_//TODO
-
-	input  Inst_Valid,     //Instruction_Valid
-	output reg Inst_Ack,       //Instruction_//TODO
-
-	//Here, the request can be read or write
-	//Data_Req_Valid is mem_read or (mem_write and data written to memory) 
-	input  Mem_Req_Ack,    //Memory_Request_//TODO
-						   //just like Inst_Req_Ack
-
-	//only have this when read from memory
-	input  Read_data_Valid,//Read_data_Valid
-						   //like Inst_Valid
-	output reg Read_data_Ack,  //Read_data_Ack_//TODO
-		                   //like Inst_Ack
+	
+	
 
 	output reg PC_enable,
 
@@ -44,9 +30,8 @@ module control_unit(
 	output regimm,
 	output blez,
 	output bgtz,
-	output [2:0] output_flag1,
-	output [2:0] output_flag2,
-	output [5:0] output_flag3
+
+	output writing_back
 );
 
 	//something related to FSM
@@ -60,7 +45,8 @@ module control_unit(
 			  WB    =3'b101, //write back
 			  ST    =3'b110; //TODO
 
-
+    assign writing_back = (state == WB)?1:0;
+	
 	//signal recording the decoded instruction
 	wire addiu, lw  , sw   , nop;
 	wire lui  , slti, sltiu;
@@ -119,61 +105,34 @@ module control_unit(
 		else
 		begin
 			case(state)
-				IF     : next_state=(Inst_Req_Ack   )? IW    :IF ;
-				IW     : next_state=(Inst_Valid     )? ID_EX :IW ; 
+				IF     : next_state=IW;
+				IW     : next_state=ID_EX; 
 				ID_EX  : next_state=(Jump_Class     )? IF    :
 									(Load_Class     )? LD    :
 									(Store_Class    )? ST    :WB ;
-				LD     : next_state=(Mem_Req_Ack    )? RDW   :LD ;
-				RDW    : next_state=(Read_data_Valid)? WB    :RDW;
-				WB     : next_state=                          IF ;
-				ST     : next_state=(Mem_Req_Ack    )? IF    :ST ;
-				default: next_state=                          IF ;
+				LD     : next_state= RDW;
+				RDW    : next_state= WB;
+				WB     : next_state= IF ;
+				ST     : next_state= IF;
+				default: next_state= IF ;
 			endcase
         end
 	end
 
-	wire [2:0] wire_flag1;
-	wire [2:0] wire_flag2;
-	wire [5:0] wire_flag3;
-	assign wire_flag1=flag1;
-	assign wire_flag2=flag2;
-	assign wire_flag3=flag2;
-	assign output_flag1=wire_flag1;
-	assign output_flag2=wire_flag2;
-	assign output_flag3=wire_flag3;
-	reg [2:0] flag1;
-	reg [2:0] flag2;
-	reg [5:0] flag3;
 	//Part 3, decide the output register
 	always @(posedge clk)
 	begin
-		flag1<=3'b111;
 		//Enable Signal and Channel Control
         case(next_state)     //use next_state, so the value will fit the state
 							 //the state and the control signals update at the
 							 //same time
 			IF     :
 			begin
-				flag2<=3'b101;
 				mem_read <=0;
 				mem_write<=0;
 				reg_write<=0;
 				PC_enable<=0;
-				if(rsetn==0)
-				begin
-					flag3<=6'b101010;
-				    Inst_Req_Valid<=0;
-					Inst_Ack  <=1;
-					Read_data_Ack <=1;
-				end
-				else
-				begin
-					flag3<=6'b000111;
-					Inst_Req_Valid<=1;
-					Inst_Ack  <=0;
-					Read_data_Ack <=0;
-				end
+				inst_sram_en<=1;
 			end
 			IW     :
 			begin
@@ -181,9 +140,7 @@ module control_unit(
 				mem_write<=0;
 				reg_write<=0;
 				PC_enable<=0;
-				Inst_Req_Valid<=0;
-				Inst_Ack      <=1;
-				Read_data_Ack <=0;
+				inst_sram_en<=0;
 			end
 			ID_EX  :
 			begin
@@ -191,9 +148,7 @@ module control_unit(
 				mem_write<=0;
 				reg_write<=(jal);  //reg_write=1 when jal=1
 				PC_enable<=Jump_Class;
-				Inst_Req_Valid<=0;
-				Inst_Ack      <=0;
-				Read_data_Ack <=0;
+				inst_sram_en<=0;
 			end
 			LD     :
 			begin
@@ -201,9 +156,7 @@ module control_unit(
 				mem_write<=0;
 				reg_write<=0;
 				PC_enable<=0;
-				Inst_Req_Valid<=0;
-				Inst_Ack      <=0;
-				Read_data_Ack <=0;
+				inst_sram_en<=0;
 			end
 			RDW    :
 			begin
@@ -211,9 +164,7 @@ module control_unit(
 				mem_write<=0;
 				reg_write<=0;
 				PC_enable<=0;
-				Inst_Req_Valid<=0;
-				Inst_Ack      <=0;
-				Read_data_Ack <=1;
+				inst_sram_en<=0;
 			end
 			WB     :
 			begin
@@ -222,9 +173,7 @@ module control_unit(
 				reg_write<=1;    //must be 1(because of the state)
 				PC_enable<=1;    //Load and Store type, update here
 				                 //exactly change one time
-				Inst_Req_Valid<=0;
-				Inst_Ack      <=1;
-				Read_data_Ack <=0;
+				inst_sram_en<=0;
 			end
 			ST     :
 			begin
@@ -233,12 +182,9 @@ module control_unit(
 				reg_write<=0;
 				PC_enable<=(state==ID_EX);//only at the first time enter ST
 										  //change PC
-				Inst_Req_Valid<=0;
-				Inst_Ack      <=0;
-				Read_data_Ack <=0;
+				inst_sram_en<=0;
 			end
 			default:
-				flag2=3'b110;
 		endcase
 	end
 

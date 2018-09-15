@@ -4,37 +4,22 @@ module mips_cpu(
 	input  resetn,
 	input  clk,
 
-	output inst_sram_en,
+	output inst_sram_en,//TODO:赋值，这里大约相当于原来的inst_req_valid之类的吧
 	output [3:0] inst_sram_wen,
 	output [31:0] inst_sram_addr,
 	output [31:0] inst_sram_wdata,
 	input [31:0] inst_sram_rdata,
 	
-	output data_sram_en,
+	output data_sram_en,//TODO：赋值可能有问题
 	output [3:0] data_sram_wen,
 	output [31:0] data_sram_addr,
 	output [31:0] data_sram_wdata,
 	input [31:0] data_sram_rdata,
 	
-	output [31:0] debug_wb_pc,//TODO：赋值
+	output [31:0] debug_wb_pc,//TODO：赋值的办法比较奇怪，用了一个信号表示处于WB状态，在它的上升沿更新，有没有好的办法。
 	output [3:0]debug_wb_rf_wen,
 	output [4:0] debug_wb_rf_wnum,
 	output [31:0] debug_wb_rf_wdata,
-	//TODO: 处理握手信号
-	//Instruction request channel
-	output Inst_Req_Valid,
-	input Inst_Req_Ack,
-
-	//Instruction response channel
-	input Inst_Valid,
-	output Inst_Ack,
-
-	//Memory request channel
-	input Mem_Req_Ack,
-
-	//Memory data response channel
-	input Read_data_Valid,
-	output Read_data_Ack,
 
     output [31:0]	mips_perf_cnt_0,//clk_counter
 );
@@ -51,17 +36,11 @@ module mips_cpu(
 	
 	//update inst and data
 	wire [2:0] next_state;
-	reg [31:0] inst;
-	always@(posedge Inst_Valid)
-	begin
-			inst<=inst_sram_rdata;
-	end
-
-	reg [31:0] data_from_mem;
-	always@(posedge Read_data_Valid)
-	begin
-			data_from_mem<=data_sram_rdata;
-	end
+	
+	wire [31:0] inst;//改了类型
+	assign inst=inst_sram_rdata;//TODO:去掉了握手信号，那么什么时候更新指令？是直接assign吗？
+	wire [31:0] data_from_mem;//改了类型
+    assign data_from_mem=data_sram_rdata;//TODO:去掉了握手信号，那么什么时候更新数据呢？是直接assign吗？
 
 	//define some simple signals (using extend)
 	wire [31:0] sign_extended_imm;
@@ -96,28 +75,27 @@ module mips_cpu(
 	wire blez;
 	wire bgtz;
 	wire [2:0] mem_write_value;
-	wire [2:0] flag1;
-	wire [2:0] flag2;
-	wire [2:0] flag3;
+	wire writing_back;
+
 	//add the control unit into the circuit
-	control_unit cpu_control_unit(.clk(clk),.resetn(resetn),.behavior(behavior),.Result(Result),
+	control_unit cpu_control_unit(.clk(clk),.resetn(resetn),.inst_sram_en(inst_sram_en),
+	    .behavior(behavior),.Result(Result),
 		.reg_dst(reg_dst),.mem_read(mem_read),.reg_write_value(reg_write_value),
 		.ALUop(ALUop),.mem_write(mem_write),.B_src(B_src),.reg_write(reg_write),
 		.data_sram_wen(data_sram_wen),.mem_write_value(mem_write_value),
-		//channel control signal
-		.Inst_Req_Valid(Inst_Req_Valid),.Inst_Req_Ack(Inst_Req_Ack),
-		.Inst_Valid(Inst_Valid),.Inst_Ack(Inst_Ack),.Mem_Req_Ack(Mem_Req_Ack),
-		.Read_data_Valid(Read_data_Valid),.Read_data_Ack(Read_data_Ack),
-
 		.PC_enable(PC_enable),
+		
 		//decoding signal
 		.bne(bne),.beq(beq),.j(j),.jal(jal),.R_type(R_type),
-		.regimm(regimm),.blez(blez),.bgtz(bgtz),.output_flag1(flag1),.output_flag2(flag2),
-		.output_flag3(flag3)
+		.regimm(regimm),.blez(blez),.bgtz(bgtz),.writing_back(writing_back)
 	);
     assign behavior=inst[31:26]; 
-	assign data_sram_en=mem_read;//TODO:这里有问题，与下一行冲突，这是由于这里mem读写用同一个信号了
-	assign data_sram_en=mem_write;
+	assign data_sram_en=mem_read | mem_write;//TODO：可能有问题
+	
+	always@(posedge writing_back)
+	begin
+	    debug_wb_pc <= PC;
+    end
 	
 	//define the signal related to reg_file
 	wire clk_reg_file;									//done

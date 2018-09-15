@@ -11,7 +11,6 @@ module alu(
 	output [`DATA_WIDTH - 1:0] Result
 );
 
-	// TODO: Please add your logic code here
 	//result of 'or''and'
 	wire [`DATA_WIDTH - 1:0] aorb;
 	wire [`DATA_WIDTH - 1:0] aandb;
