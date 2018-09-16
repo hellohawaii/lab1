@@ -1,10 +1,10 @@
 `timescale 10ns / 1ns
 
-module mips_cpu(
+module mycpu_top(
 	input  resetn,
 	input  clk,
 
-	output inst_sram_en,//TODO:赋值，这里大约相当于原来的inst_req_valid之类的吧
+	output inst_sram_en,//TODO:赋�?�，这里大约相当于原来的inst_req_valid之类的吧
 	output [3:0] inst_sram_wen,
 	output [31:0] inst_sram_addr,
 	output [31:0] inst_sram_wdata,
@@ -16,12 +16,12 @@ module mips_cpu(
 	output [31:0] data_sram_wdata,
 	input [31:0] data_sram_rdata,
 	
-	output [31:0] debug_wb_pc,//TODO：赋值的办法比较奇怪，用了一个信号表示处于WB状态，在它的上升沿更新，有没有好的办法。
+	output reg [31:0] debug_wb_pc,//TODO：赋值的办法比较奇�?�，用了�?个信号表示处于WB状�?�，在它的上升沿更新，有没有好的办法�?
 	output [3:0]debug_wb_rf_wen,
 	output [4:0] debug_wb_rf_wnum,
 	output [31:0] debug_wb_rf_wdata,
 
-    output [31:0]	mips_perf_cnt_0,//clk_counter
+    output [31:0]	mips_perf_cnt_0//clk_counter
 );
 
     reg [31:0] PC;
@@ -30,7 +30,7 @@ module mips_cpu(
 	assign inst_sram_addr = PC;
 	assign inst_sram_wdata = 0;
 	
-	assign debug_wb_rf_wen = 4{wen};//TODO：语法可能有问题
+	assign debug_wb_rf_wen = {4{wen_reg_file}};//TODO：语法可能有问题
 	assign debug_wb_rf_wnum = waddr;
 	assign debug_wb_rf_wdata = wdata;
 	
@@ -38,9 +38,9 @@ module mips_cpu(
 	wire [2:0] next_state;
 	
 	wire [31:0] inst;//改了类型
-	assign inst=inst_sram_rdata;//TODO:去掉了握手信号，那么什么时候更新指令？是直接assign吗？
+	assign inst=inst_sram_rdata;//TODO:去掉了握手信号，那么�?么时候更新指令？是直接assign吗？
 	wire [31:0] data_from_mem;//改了类型
-    assign data_from_mem=data_sram_rdata;//TODO:去掉了握手信号，那么什么时候更新数据呢？是直接assign吗？
+    assign data_from_mem=data_sram_rdata;//TODO:去掉了握手信号，那么�?么时候更新数据呢？是直接assign吗？
 
 	//define some simple signals (using extend)
 	wire [31:0] sign_extended_imm;
@@ -263,7 +263,7 @@ module mips_cpu(
 	//PC
 	always @(posedge clk) begin
 		if(resetn==0) begin
-			PC<=0xbfc00000;//TODO：不知道这种数字表示方法行不行
+			PC<=32'Hbfc00000;//TODO：不知道这种数字表示方法行不�?
 		end
 		else if(PC_enable)begin
 			PC<=pc_next;

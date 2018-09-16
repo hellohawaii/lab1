@@ -5,7 +5,7 @@
 module control_unit(
 	input  clk,
 	input  resetn,
-	output inst_sram_en,
+	output reg inst_sram_en,
 	input  [5:0] behavior,
 	input  [31:0] Result,//ALU result
 	output [1:0] reg_dst,//signal for mux(where to write)
@@ -184,7 +184,7 @@ module control_unit(
 										  //change PC
 				inst_sram_en<=0;
 			end
-			default:
+			default:;
 		endcase
 	end
 
