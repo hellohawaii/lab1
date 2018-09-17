@@ -18,8 +18,7 @@ module control_unit(
 	output [3:0] data_sram_wen,//signal for 8or16-bit write
 	output [2:0] mem_write_value,//signal for mux(what to write to mem)
 	
-	
-
+	output reg in_delay_slot,     //wheather the instruction is in the delay slot
 	output reg PC_enable,
 
 	output bne,
@@ -131,7 +130,9 @@ module control_unit(
 				mem_read <=0;
 				mem_write<=0;
 				reg_write<=0;
+				in_delay_slot<=0;
 				PC_enable<=0;
+
 				inst_sram_en<=1;
 			end
 			IW     :
@@ -139,6 +140,7 @@ module control_unit(
 				mem_read <=0;
 				mem_write<=0;
 				reg_write<=0;
+				in_delay_slot<=0;
 				PC_enable<=0;
 				inst_sram_en<=0;
 			end
@@ -147,6 +149,7 @@ module control_unit(
 				mem_read <=0;
 				mem_write<=0;
 				reg_write<=(jal);  //reg_write=1 when jal=1
+				in_delay_slot<=(jal);
 				PC_enable<=Jump_Class;
 				inst_sram_en<=0;
 			end
@@ -155,6 +158,7 @@ module control_unit(
 				mem_read <=1;    //must be 1(because of the state)
 				mem_write<=0;
 				reg_write<=0;
+				in_delay_slot<=0;
 				PC_enable<=0;
 				inst_sram_en<=0;
 			end
@@ -163,6 +167,7 @@ module control_unit(
 				mem_read <=0;
 				mem_write<=0;
 				reg_write<=0;
+				in_delay_slot<=0;
 				PC_enable<=0;
 				inst_sram_en<=0;
 			end
@@ -171,6 +176,7 @@ module control_unit(
 				mem_read <=0;
 				mem_write<=0;
 				reg_write<=1;    //must be 1(because of the state)
+				in_delay_slot<=0;
 				PC_enable<=1;    //Load and Store type, update here
 				                 //exactly change one time
 				inst_sram_en<=0;
@@ -180,6 +186,7 @@ module control_unit(
 				mem_read <=0;
 				mem_write<=1;     //must be 1(because of the state)
 				reg_write<=0;
+				in_delay_slot<=0;
 				PC_enable<=(state==ID_EX);//only at the first time enter ST
 										  //change PC
 				inst_sram_en<=0;

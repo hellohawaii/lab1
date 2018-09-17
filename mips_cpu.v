@@ -76,6 +76,7 @@ module mycpu_top(
 	wire bgtz;
 	wire [2:0] mem_write_value;
 	wire writing_back;
+    wire in_delay_slot;
 
 	//add the control unit into the circuit
 	control_unit cpu_control_unit(.clk(clk),.resetn(resetn),.inst_sram_en(inst_sram_en),
@@ -87,12 +88,13 @@ module mycpu_top(
 		
 		//decoding signal
 		.bne(bne),.beq(beq),.j(j),.jal(jal),.R_type(R_type),
-		.regimm(regimm),.blez(blez),.bgtz(bgtz),.writing_back(writing_back)
+		.regimm(regimm),.blez(blez),.bgtz(bgtz),.writing_back(writing_back),
+		.in_delay_slot(in_delay_slot)
 	);
     assign behavior=inst[31:26]; 
 	assign data_sram_en=mem_read | mem_write;//TODO：可能有问题
 	
-	always@(posedge writing_back)
+	always@(posedge writing_back or posedge jal)
 	begin
 	    debug_wb_pc <= PC;
     end
@@ -230,7 +232,7 @@ module mycpu_top(
 		         (reg_write_value==4'b0001)?wdata_option0001:
 				 (reg_write_value==4'b0010 ||
 			     reg_write_value==4'b0000 && inst[5:0]==6'b001001 && R_type==1
-			     )?(pc_next_option00+4):
+			     )?(pc_next_option000+4):
 				                                //pc_next_option00 is defined below
 				 (reg_write_value==4'b0011)?imm_sl16:
 				 (reg_write_value==4'b0100 || 
@@ -272,36 +274,48 @@ module mycpu_top(
 	end
 
 	wire [31:0] pc_next;
-	wire [31:0] pc_next_option00;
-	wire [31:0] pc_next_option01;
-	wire [31:0] pc_next_option10;
-	wire [31:0] pc_next_option11;
-	wire [1:0] pc_decider;
+	wire [31:0] pc_next_option000;
+	wire [31:0] pc_next_option001;
+	wire [31:0] pc_next_option010;
+	wire [31:0] pc_next_option011;
+	reg [31:0] pc_next_option100;
+	wire [2:0] pc_decider;
 
-	assign pc_next_option00=PC+4;  //directly +4
+	assign pc_next_option000=PC+4;  //directly +4
 
 	wire [31:0] offset;
 	assign offset={sign_extended_imm[29:0],2'b00};
-	assign pc_next_option01=pc_next_option00+offset;  //beq,bne(pc+offset)
+	assign pc_next_option001=pc_next_option000+offset;  //beq,bne(pc+offset)
 	
-	assign pc_next_option10={pc_next_option00[31:28],instr_index_sl2[27:0]};
+	assign pc_next_option010={pc_next_option000[31:28],instr_index_sl2[27:0]};
 
-	assign pc_next_option11=rdata1;
+	assign pc_next_option011=rdata1;
 
-	assign pc_decider=(Zero==0 && bne==1)?2'b01:
+    always @(posedge clk)
+    begin
+        if(jal ==1)
+        begin
+            pc_next_option100<={pc_next_option000[31:28],instr_index_sl2[27:0]};
+        end
+        //TODO:otherwise pc_next_option100 dosen't change, how to code?
+    end
+    
+	assign pc_decider=(Zero==0 && bne==1)?3'b001:
 		              (Zero==1 && beq==1 ||
 					  regimm==1 && inst[20:16]==5'b00001 && Result[0]==0 ||//bgez
 				      blez==1 && (Result[0]==1 || rdata1==32'b0) ||//blez
 					  bgtz==1 && (Result[0]==0 && rdata1!=32'b0) ||//bgtz
-					  regimm==1 && inst[20:16]==5'b00000 && Result[0]==1)?2'b01://bltz
-					  (j==1 || jal==1)?2'b10:
-					  (R_type==1 && inst[5:1]==5'b00100)?2'b11://unify jalr and jr
+					  regimm==1 && inst[20:16]==5'b00000 && Result[0]==1)?3'b001://bltz
+					  (j==1 /*|| jal==1 */)?3'b010:
+					  (R_type==1 && inst[5:1]==5'b00100)?3'b011://unify jalr and jr
+					  (in_delay_slot==1)?3'b100:
 					  2'b00;
 
-	assign pc_next=(pc_decider==2'b00)?pc_next_option00:
-		           (pc_decider==2'b01)?pc_next_option01:
-				   (pc_decider==2'b10)?pc_next_option10:
-				   (pc_decider==2'b11)?pc_next_option11:
+	assign pc_next=(pc_decider==3'b000)?pc_next_option000:
+		           (pc_decider==3'b001)?pc_next_option001:
+				   (pc_decider==3'b010)?pc_next_option010:
+				   (pc_decider==3'b011)?pc_next_option011:
+				   (pc_decider==3'b100)?pc_next_option100:
 				   0;
 
 	//mips_per_cnt_0   clk_counter
