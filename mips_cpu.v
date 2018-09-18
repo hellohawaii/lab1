@@ -94,7 +94,9 @@ module mycpu_top(
     assign behavior=inst[31:26]; 
 	assign data_sram_en=mem_read | mem_write;//TODO：可能有问题
 	
-	always@(posedge writing_back or posedge jal)
+	wire debug_wb_pc_update;
+	assign debug_wb_pc_update = writing_back | jal;
+	always@(posedge debug_wb_pc_update)
 	begin
 	    debug_wb_pc <= PC;
     end
